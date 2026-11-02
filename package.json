@@ -1,0 +1,13 @@
+package.json
+{
+  "name": "gebgive-bot",
+  "version": "1.0.0",
+  "description": "LINE OA Bot for tracking giveaways with Supabase and Vercel",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0"
+  }
+}

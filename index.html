@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Giveaway Checklist 💗</title>
+    <!-- นำเข้า Supabase Client SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        /* สามารถใส่ CSS ตกแต่งตามชอบ หรือปล่อยไว้ก่อนได้ */
+        body { font-family: sans-serif; background: var(--theme-bg, #fff7fb); color: var(--theme-text, #4a3540); margin: 0; padding: 20px; }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+    <!-- ส่วนหน้าเข้าสู่ระบบ -->
+    <div id="loginPanel">
+        <h2>ยินดีต้อนรับ ✨</h2>
+        <label for="nickname">ชื่อเล่นของคุณ</label>
+        <input type="text" id="nickname" placeholder="เช่น mochi / pinky">
+        <button id="startBtn">เริ่มใช้งานของฉัน</button>
+    </div>
+
+    <!-- ส่วนหน้าจัดการเช็กลิสต์ (ซ่อนไว้ก่อนจนกว่าจะlogin) -->
+    <div id="tracker" class="hidden">
+        <h1 id="userHeading">เช็กลิสต์ของฉัน 💗</h1>
+        <button id="logoutBtn">ออกจากพื้นที่นี้</button>
+        
+        <form id="addForm">
+            <h3>เพิ่ม Giveaway ใหม่ ✿</h3>
+            <label for="postTitle">ชื่อรายการ</label>
+            <input type="text" id="postTitle" placeholder="เช่น โฟโต้การ์ด">
+            <label for="postUrl">ลิงก์ต้นโพสต์ X / Twitter</label>
+            <input type="text" id="postUrl" placeholder="https://x.com/...">
+            <label for="postNote">โน้ต</label>
+            <input type="text" id="postNote" placeholder="เช่น ปิดรับ 30 ต.ค.">
+            <button type="submit">＋ เพิ่มลงเช็กลิสต์</button>
+        </form>
+
+        <select id="filter">
+            <option value="all">ทั้งหมด</option>
+            <option value="todo">ยังไม่ได้เก็บ</option>
+            <option value="done">เก็บแล้ว</option>
+        </select>
+        <input type="text" id="searchInput" placeholder="ค้นหาชื่อ Giveaway...">
+
+        <div id="items"></div>
+        <div id="emptyState" class="hidden">ยังไม่มีรายการเลย 🌷</div>
+    </div>
+
+    <p id="statusMessage"></p>
+    <footer>Made with love for giveaway collectors 💕</footer>
+
+    <!-- นำเข้าโค้ด JavaScript ที่คุณเขียนไว้ -->
+    <script src="script.js"></script>
+</body>
+</html>
