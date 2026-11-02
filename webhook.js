@@ -6,8 +6,9 @@ const supabase = createClient(
 )
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(200).send('OK');
+  // รองรับการกด Verify จาก LINE (GET หรือ POST ที่ส่งมาทดสอบ)
+  if (req.method === 'GET') {
+    return res.status(200).send('Webhook is running!');
   }
 
   const events = req.body.events;
