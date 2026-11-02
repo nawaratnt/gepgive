@@ -7,7 +7,7 @@
     const LIFF_ID = "2012277521-OkRPjmrd"; // อันนี้ดึงจากโค้ดเดิมของคุณ
 
     // เชื่อมต่อ Supabase
-    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     let userUserId = "";
     let allItems = [];
@@ -32,7 +32,7 @@
     async function loadItems() {
       document.getElementById("loading").style.display = "block";
       try {
-        const { data, error } = await supabase
+        const { data, error } = await _supabase
           .from('giveaway_items')
           .select('*')
           .eq('owner_id', userUserId)
@@ -109,7 +109,7 @@
 
     // ฟังก์ชันเปลี่ยนสถานะ (รับแล้ว/ยังไม่รับ)
     async function toggleStatus(id, currentStatus) {
-      await supabase
+      await _supabase
         .from('giveaway_items')
         .update({ is_done: !currentStatus })
         .eq('id', id);
@@ -118,9 +118,9 @@
 
     // ฟังก์ชันแก้ไขชื่อรายการ
     async function editTitle(id, currentTitle) {
-      const newTitle = prompt("แก้ไขชื่อรายการ/ของแจก:", currentTitle);
+      const newTitle = prompt("แก้ไขชื่อรายการ:", currentTitle);
       if (newTitle && newTitle !== currentTitle) {
-        await supabase
+        await _supabase
           .from('giveaway_items')
           .update({ title: newTitle })
           .eq('id', id);
@@ -131,7 +131,7 @@
     // ฟังก์ชันลบรายการ
     async function deleteItem(id) {
       if (confirm("คุณต้องการลบรายการนี้ใช่ไหมคะ?")) {
-        await supabase
+        await _supabase
           .from('giveaway_items')
           .delete()
           .eq('id', id);
