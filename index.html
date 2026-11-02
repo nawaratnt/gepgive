@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Giveaway Checklist</title>
   
-  <!-- นำเข้า LIFF และ Supabase SDK -->
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   
@@ -71,7 +70,7 @@
 
   <div class="card">
     <label>Search Giveaway</label>
-    <input type="text" id="searchInput" onkeyup="filterItems()" placeholder="พิมพ์ชื่อ Giveaway ที่ต้องการค้นหา...">
+    <input type="text" id="searchInput" onkeyup="filterItems()" placeholder="พิมพ์ชื่อ Giveaway หรือ Account ที่ต้องการค้นหา...">
   </div>
 
   <div id="loading" class="loading">กำลังโหลดข้อมูล...</div>
@@ -82,14 +81,10 @@
   </p>
 
   <script>
-    // ⚠️ 1. ใส่ URL และ anon key จาก Supabase ของคุณ
     const SUPABASE_URL = 'https://qatwqsmxvpkffnuaztmt.supabase.co/rest/v1/'; 
-    const SUPABASE_ANON_KEY = 'sb_publishable_UYiE1rt673cLg2Brm8K5xw_sBkLgaBH'; // วาง anon key ที่ก๊อปปี้มา
-    
-    // ⚠️ 2. ใส่ LIFF ID 
+    const SUPABASE_ANON_KEY = 'sb_publishable_UYiE1rt673cLg2Brm8K5xw_sBkLgaBH'; // ⚠️ อย่าลืมใส่ anon key ของคุณ
     const LIFF_ID = "2012277521-OkRPjmrd"; 
 
-    // เชื่อมต่อ Supabase
     const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     let userUserId = "";
@@ -117,8 +112,8 @@
         const { data, error } = await _supabase
           .from('giveaway_items')
           .select('*')
-          .eq('owner_id', userUserId)
-          .order('created_at', { ascending: false });
+          .eq('user_id', userUserId)
+          .order('time', { ascending: false });
 
         if (error) throw error;
         
@@ -135,7 +130,7 @@
 
     function updateSummary(items) {
       const total = items.length;
-      const done = items.filter(item => item.is_done === true).length;
+      const done = items.filter(item => item.status === true).length;
       const pending = total - done;
 
       document.getElementById("countAll").innerText = total;
@@ -153,25 +148,25 @@
       }
 
       items.forEach(item => {
-        const isDone = item.is_done === true;
+        const isDone = item.status === true;
         const imgUrl = item.image_url || "https://images.unsplash.com/photo-1513151233558-d860c5398176?w=400";
 
         const html = `
           <div class="item-card">
             <div class="item-body">
-              <img src="${imgUrl}" class="item-img" alt="Giveaway Image" onclick="openTweet('${item.post_url}')">
+              <img src="${imgUrl}" class="item-img" alt="Giveaway Image" onclick="openTweet('${item.url}')">
               <div class="item-content">
                 <div class="item-header">
-                  <span class="item-title ${isDone ? "completed" : ""}">${item.title || "ไม่มีชื่อรายการ"}</span>
+                  <span class="item-title ${isDone ? "completed" : ""}">${item.item || "ไม่มีชื่อรายการ"}</span>
                   <input type="checkbox" class="checkbox" ${isDone ? "checked" : ""} onchange="toggleStatus('${item.id}', ${isDone})">
                 </div>
-                <div class="item-url" onclick="openTweet('${item.post_url}')">${item.post_url}</div>
+                <div class="item-url" onclick="openTweet('${item.url}')">${item.url}</div>
                 ${item.note ? `<div style="font-size:12px; color:#666; margin-top:6px;">📌 ${item.note}</div>` : ''}
               </div>
             </div>
             <div class="btn-group">
-              <button class="btn-action btn-link" onclick="openTweet('${item.post_url}')">เปิดโพสต์ ↗</button>
-              <button class="btn-action btn-edit" onclick="editTitle('${item.id}', '${item.title || ""}')">แก้ไขชื่อ ✎</button>
+              <button class="btn-action btn-link" onclick="openTweet('${item.url}')">เปิดโพสต์ ↗</button>
+              <button class="btn-action btn-edit" onclick="editTitle('${item.id}', '${item.item || ""}')">แก้ไขชื่อ ✎</button>
               <button class="btn-action btn-del" onclick="deleteItem('${item.id}')">ลบรายการ</button>
             </div>
           </div>
@@ -189,17 +184,17 @@
     async function toggleStatus(id, currentStatus) {
       await _supabase
         .from('giveaway_items')
-        .update({ is_done: !currentStatus })
+        .update({ status: !currentStatus })
         .eq('id', id);
       loadItems();
     }
 
     async function editTitle(id, currentTitle) {
-      const newTitle = prompt("แก้ไขชื่อรายการ:", currentTitle);
+      const newTitle = prompt("แก้ไขชื่อรายการ/ของแจก:", currentTitle);
       if (newTitle && newTitle !== currentTitle) {
         await _supabase
           .from('giveaway_items')
-          .update({ title: newTitle })
+          .update({ item: newTitle })
           .eq('id', id);
         loadItems();
       }
@@ -218,7 +213,8 @@
     function filterItems() {
       const query = document.getElementById("searchInput").value.toLowerCase();
       const filtered = allItems.filter(item => 
-        (item.title && item.title.toLowerCase().includes(query)) || 
+        (item.item && item.item.toLowerCase().includes(query)) || 
+        (item.account && item.account.toLowerCase().includes(query)) ||
         (item.note && item.note.toLowerCase().includes(query))
       );
       renderItems(filtered);
