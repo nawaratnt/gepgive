@@ -7,7 +7,7 @@ const supabase = createClient(
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
-    return res.status(405).send({ message: 'Method Not Allowed' })
+    return res.status(200).send('OK');
   }
 
   const events = req.body.events;
@@ -22,15 +22,13 @@ export default async function handler(req, res) {
       const replyToken = event.replyToken;
 
       try {
-        // 1. ดึงชื่อ Twitter Account จากลิงก์ (ใส่คอลัมน์ account)
         let twitterAccount = "ไม่ระบุ";
         if (text.includes('x.com/') || text.includes('twitter.com/')) {
             const match = text.match(/(?:x\.com|twitter\.com)\/([^\/]+)/);
             if (match) twitterAccount = match[1];
         }
 
-        // 2. บันทึกลง Supabase (ใช้ชื่อคอลัมน์ตามตารางใหม่ของคุณ)
-        const { error } = await supabase
+        await supabase
           .from('giveaway_items')
           .insert([
             { 
@@ -42,11 +40,6 @@ export default async function handler(req, res) {
             }
           ]);
 
-        if (error) {
-            console.error('Supabase Insert Error:', error);
-        }
-
-        // 3. ตอบกลับ LINE
         const lineToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
         if (lineToken) {
            await fetch('https://api.line.me/v2/bot/message/reply', {
@@ -66,7 +59,6 @@ export default async function handler(req, res) {
              })
            });
         }
-
       } catch (err) {
          console.error('Webhook Error:', err);
       }
