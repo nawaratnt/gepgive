@@ -6,64 +6,64 @@ const supabase = createClient(
 )
 
 export default async function handler(req, res) {
-  // รองรับการกด Verify จาก LINE (GET หรือ POST ที่ส่งมาทดสอบ)
-  if (req.method === 'GET') {
-    return res.status(200).send('Webhook is running!');
-  }
+  // อนุญาตให้ LINE เข้ามาตรวจสอบ Webhook URL ได้ทันทีโดยไม่ติด 401
+  if (req.method === 'GET' || req.method === 'POST') {
+    const events = req.body && req.body.events;
+    if (!events || !Array.isArray(events)) {
+      return res.status(200).send('OK');
+    }
 
-  const events = req.body.events;
-  if (!events || !Array.isArray(events)) {
-    return res.status(200).send('OK');
-  }
+    for (const event of events) {
+      if (event.type === 'message' && event.message.type === 'text') {
+        const userId = event.source.userId;
+        const text = event.message.text.trim();
+        const replyToken = event.replyToken;
 
-  for (const event of events) {
-    if (event.type === 'message' && event.message.type === 'text') {
-      const userId = event.source.userId;
-      const text = event.message.text.trim();
-      const replyToken = event.replyToken;
+        try {
+          let twitterAccount = "ไม่ระบุ";
+          if (text.includes('x.com/') || text.includes('twitter.com/')) {
+              const match = text.match(/(?:x\.com|twitter\.com)\/([^\/]+)/);
+              if (match) twitterAccount = match[1];
+          }
 
-      try {
-        let twitterAccount = "ไม่ระบุ";
-        if (text.includes('x.com/') || text.includes('twitter.com/')) {
-            const match = text.match(/(?:x\.com|twitter\.com)\/([^\/]+)/);
-            if (match) twitterAccount = match[1];
+          await supabase
+            .from('giveaway_items')
+            .insert([
+              { 
+                user_id: userId,
+                account: twitterAccount, 
+                item: "Giveaway จาก @" + twitterAccount, 
+                url: text,
+                status: false
+              }
+            ]);
+
+          const lineToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+          if (lineToken) {
+             await fetch('https://api.line.me/v2/bot/message/reply', {
+               method: 'POST',
+               headers: {
+                 'Content-Type': 'application/json',
+                 'Authorization': `Bearer ${lineToken}`
+               },
+               body: JSON.stringify({
+                 replyToken: replyToken,
+                 messages: [
+                   {
+                     type: 'text',
+                     text: `✨ บันทึก Giveaway จาก @${twitterAccount} ลงเช็กลิสต์เรียบร้อยแล้วค่ะ! 💗`
+                   }
+                 ]
+               })
+             });
+          }
+        } catch (err) {
+           console.error('Webhook Error:', err);
         }
-
-        await supabase
-          .from('giveaway_items')
-          .insert([
-            { 
-              user_id: userId,
-              account: twitterAccount, 
-              item: "Giveaway จาก @" + twitterAccount, 
-              url: text,
-              status: false
-            }
-          ]);
-
-        const lineToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
-        if (lineToken) {
-           await fetch('https://api.line.me/v2/bot/message/reply', {
-             method: 'POST',
-             headers: {
-               'Content-Type': 'application/json',
-               'Authorization': `Bearer ${lineToken}`
-             },
-             body: JSON.stringify({
-               replyToken: replyToken,
-               messages: [
-                 {
-                   type: 'text',
-                   text: `✨ บันทึก Giveaway จาก @${twitterAccount} ลงเช็กลิสต์เรียบร้อยแล้วค่ะ! 💗`
-                 }
-               ]
-             })
-           });
-        }
-      } catch (err) {
-         console.error('Webhook Error:', err);
       }
     }
+
+    return res.status(200).send('OK');
   }
 
   return res.status(200).send('OK');
