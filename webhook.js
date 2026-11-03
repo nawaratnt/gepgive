@@ -6,7 +6,6 @@ const supabase = createClient(
 )
 
 export default async function handler(req, res) {
-  // ให้คืนค่าสถานะ 200 ทันทีสำหรับการทดสอบและเชื่อมต่อ
   if (req.method === 'GET') {
     return res.status(200).send('Webhook is running!');
   }
@@ -17,8 +16,8 @@ export default async function handler(req, res) {
   }
 
   for (const event of events) {
-    if (event.type === 'message' && event.message.type === 'text') {
-      const userId = event.source.userId;
+    if (event.type === 'message' && event.message && event.message.type === 'text') {
+      const userId = event.source && event.source.userId;
       const text = event.message.text.trim();
       const replyToken = event.replyToken;
 
@@ -33,7 +32,7 @@ export default async function handler(req, res) {
           .from('giveaway_items')
           .insert([
             { 
-              user_id: userId,
+              user_id: userId || 'unknown',
               account: twitterAccount, 
               item: "Giveaway จาก @" + twitterAccount, 
               url: text,
@@ -42,7 +41,7 @@ export default async function handler(req, res) {
           ]);
 
         const lineToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
-        if (lineToken) {
+        if (lineToken && replyToken) {
            await fetch('https://api.line.me/v2/bot/message/reply', {
              method: 'POST',
              headers: {
@@ -54,7 +53,7 @@ export default async function handler(req, res) {
                messages: [
                  {
                    type: 'text',
-                   text: `✨ บันทึก Giveaway จาก @${twitterAccount} ลงเช็กลิสต์เรียบร้อยแล้วค่ะ! 💗`
+                   text: `✨ บันทึก Giveaway จาก @${twitterAccount} เรียบร้อยแล้วค่ะ! 💗`
                  }
                ]
              })
