@@ -26,22 +26,29 @@ export default async function handler(req, res) {
         const replyToken = event.replyToken;
 
         let twitterAccount = "ไม่ระบุ";
-        let tweetImageUrl = ""; // ตัวแปรสำหรับเก็บรูปจาก Twitter
+        let tweetImageUrl = ""; 
+        let tweetTextForGemini = text; // ตัวแปรสำหรับเก็บข้อความที่จะส่งให้ AI
 
-        // 1. ดึงชื่อแอคเคาน์และ "ดึงรูปภาพ" จากลิงก์ Twitter อัตโนมัติ
+        // 1. ดึงข้อความทวีต และรูปภาพ จากลิงก์อัตโนมัติ (Bypass Twitter Block)
         const tweetMatch = text.match(/(?:x\.com|twitter\.com)\/([^\/]+)\/status\/(\d+)/);
         if (tweetMatch) {
           twitterAccount = tweetMatch[1];
           try {
-            // ใช้ API เสริมเพื่อดึงรูปจากทวีต
             const vxUrl = `https://api.vxtwitter.com/${tweetMatch[1]}/status/${tweetMatch[2]}`;
             const vxRes = await fetch(vxUrl);
             const vxData = await vxRes.json();
+            
+            // ถ้าดึงข้อความสำเร็จ ให้เอาข้อความทวีตไปแทนที่ลิงก์เปล่าๆ
+            if (vxData && vxData.text) {
+              tweetTextForGemini = vxData.text; 
+            }
+            
+            // ดึงรูปภาพ
             if (vxData && vxData.mediaURLs && vxData.mediaURLs.length > 0) {
-              tweetImageUrl = vxData.mediaURLs[0]; // เอารูปแรกสุดของทวีตมาใช้
+              tweetImageUrl = vxData.mediaURLs[0];
             }
           } catch (e) {
-            console.error("Image Fetch Error:", e);
+            console.error("Fetch Data Error:", e);
           }
         } else if (text.includes('x.com/') || text.includes('twitter.com/')) {
            const accMatch = text.match(/(?:x\.com|twitter\.com)\/([^\/]+)/);
@@ -55,27 +62,27 @@ export default async function handler(req, res) {
           time: "TBA",
           note: "-",
           hashtag: "-",
-          imageUrl: tweetImageUrl || "https://images.unsplash.com/photo-1513519245088-0e12902e5a38?w=300" // ถ้ารูปดึงไม่ได้ค่อยใช้รูปสำรอง
+          imageUrl: tweetImageUrl || "https://images.unsplash.com/photo-1513519245088-0e12902e5a38?w=300"
         };
 
-        // 2. ใช้ Gemini จัดการแยกข้อมูล Date, Time, Location ให้ออกมาเป๊ะๆ
+        // 2. ใช้ Gemini วิเคราะห์เนื้อหาทวีตที่ดึงมาได้
         try {
-          const prompt = `สกัดข้อมูลจากข้อความนี้: "${text}"
+          const prompt = `สกัดข้อมูลจากข้อความนี้: "${tweetTextForGemini}"
           ให้ออกมาเป็น JSON เท่านั้น โดยใช้ key ตามนี้เป๊ะๆ:
           {
-            "giveawayName": "ชื่อของแจก (ถ้าไม่ระบุให้ดึงชื่อศิลปินหรือวง เช่น BTS, NCT หรือใส่ Giveaway)",
-            "date": "วันที่ (ถ้าไม่ระบุให้ใส่ TBA)",
-            "location": "สถานที่รับ (ถ้าไม่ระบุให้ใส่ TBA)",
+            "giveawayName": "ดึงชื่อของแจกหลักให้อยู่ในรูปแบบที่ชัดเจน เช่น "Carabiner & Brooch", "Cookies, Pudding cup", "Card Sticker Set" หากข้อความใช้ฟอนต์พิเศษ (Unicode font) ให้แปลงเป็นตัวอักษรอังกฤษปกติ (ถ้าไม่เจอให้ตอบ "giveaway")",
+            "date": "หาพิกัดสถานที่แจก เช่น หลังอีโมจิ 📍 หรือคำว่า location / stadium เช่น "Impact Arena", "Thammasat Stadium", "tba"",
+            "location": "หาพิกัดสถานที่แจก เช่น หลังอีโมจิ 📍 หรือคำว่า location / stadium เช่น "Impact Arena", "Thammasat Stadium", "tba"",
             "time": "เวลา (ถ้าไม่ระบุให้ใส่ TBA)",
             "note": "รายละเอียดเพิ่มเติมสั้นๆ (ถ้าไม่มีให้ใส่ -)",
-            "hashtag": "แฮชแท็กทั้งหมดในข้อความ (ถ้าไม่มีให้ใส่ -)"
+            "hashtag": "ดึงแฮชแท็กทั้งหมดในทวีตมารวมกันเว้นวรรค เช่น "#JASPERCONCERT #Santapp" #THE_REDLINE_BANGKOK #NCT127_5TH_NEOCITY_BANGKOK_THE_REDLINE"(จะอยู่ท้ายๆของทวีต)"
           }`;
 
           const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: prompt,
             config: {
-              responseMimeType: "application/json" // บังคับให้ AI ส่งกลับมาเป็น JSON เท่านั้น
+              responseMimeType: "application/json"
             }
           });
 
@@ -101,12 +108,12 @@ export default async function handler(req, res) {
               user_id: userId,
               account: twitterAccount,
               item: giveawayData.giveawayName,
-              url: text,
+              url: text, // เก็บลิงก์ต้นฉบับ
               status: false
             }
           ]);
 
-        // 4. ตอบกลับ Flex Message
+        // 4. ส่ง Flex Message กลับ
         const lineToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
         if (lineToken && replyToken) {
           await fetch('https://api.line.me/v2/bot/message/reply', {
@@ -120,7 +127,7 @@ export default async function handler(req, res) {
               messages: [
                 {
                   type: "flex",
-                  altText: " Completed ✅",
+                  altText: "✨ Completed ✅",
                   contents: {
                     type: "bubble",
                     size: "mega",
