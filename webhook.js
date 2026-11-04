@@ -13,7 +13,6 @@ export default async function handler(req, res) {
 
   try {
     const events = req.body && req.body.events;
-
     if (!events || !Array.isArray(events) || events.length === 0) {
       return res.status(200).send('OK');
     }
@@ -26,54 +25,62 @@ export default async function handler(req, res) {
         const text = event.message.text.trim();
         const replyToken = event.replyToken;
 
-        // ดึงชื่อแอคเคาน์ Twitter จากลิงก์
         let twitterAccount = "ไม่ระบุ";
         if (text.includes('x.com/') || text.includes('twitter.com/')) {
           const match = text.match(/(?:x\.com|twitter\.com)\/([^\/]+)/);
           if (match) twitterAccount = match[1];
         }
 
-        // ค่าเริ่มต้นกรณี Gemini อ่านไม่สำเร็จ
+        // ค่าเริ่มต้น
         let giveawayData = {
           giveawayName: "Giveaway จาก @" + twitterAccount,
           date: "TBA",
           location: "TBA",
           time: "TBA",
-          note: text,
-          hashtag: "#Giveaway",
+          note: "-",
+          hashtag: "-",
           imageUrl: "https://images.unsplash.com/photo-1513519245088-0e12902e5a38?w=300"
         };
 
-        // ใช้ Gemini วิเคราะห์ข้อความ
+        // ใช้ Gemini วิเคราะห์ข้อความแบบบังคับ JSON 100%
         try {
-          const prompt = `วิเคราะห์ลิงก์หรือข้อความทวีตนี้: "${text}" แล้วสกัดข้อมูลออกมาเป็น JSON format ตามนี้เท่านั้น (ห้ามมี markdown code block อื่น):
+          const prompt = `สกัดข้อมูลจากข้อความนี้: "${text}"
+          ให้ออกมาเป็น JSON เท่านั้น โดยใช้ key ตามนี้เป๊ะๆ:
           {
-            "giveawayName": "ชื่อของแจก",
-            "date": "วันที่จัดงาน",
-            "location": "สถานที่รับ",
-            "time": "เวลา",
-            "note": "รายละเอียดเพิ่มเติม",
-            "hashtag": "แฮชแท็ก",
-            "imageUrl": "ลิงก์รูปภาพตัวอย่างจากทวีต หรือถ้าไม่มีให้ใส่ค่าว่างเป็นสตริงเปล่า ''"
+            "giveawayName": "ชื่อของแจก (ถ้าไม่ระบุให้ดึงชื่อศิลปินหรือวง เช่น BTS, NCT หรือใส่ Giveaway)",
+            "date": "วันที่ (ถ้าไม่ระบุให้ใส่ TBA)",
+            "location": "สถานที่รับ (ถ้าไม่ระบุให้ใส่ TBA)",
+            "time": "เวลา (ถ้าไม่ระบุให้ใส่ TBA)",
+            "note": "รายละเอียดเพิ่มเติมสั้นๆ (ถ้าไม่มีให้ใส่ -)",
+            "hashtag": "แฮชแท็กทั้งหมดในข้อความ (ถ้าไม่มีให้ใส่ -)",
+            "imageUrl": "ลิงก์รูปภาพ (ถ้าไม่มีให้ใส่ค่าว่าง '')"
           }`;
 
           const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: prompt,
+            config: {
+              responseMimeType: "application/json"
+            }
           });
 
-          const jsonText = response.text.replace(/```json/g, '').replace(/```/g, '').trim();
-          const parsed = JSON.parse(jsonText);
+          // ไม่ต้อง replace ```json แล้ว เพราะ API จะส่งมาเป็น JSON แท้ๆ
+          const parsed = JSON.parse(response.text.trim());
           giveawayData = {
             ...giveawayData,
-            ...parsed,
+            giveawayName: parsed.giveawayName !== "Giveaway" ? parsed.giveawayName : giveawayData.giveawayName,
+            date: parsed.date || "TBA",
+            location: parsed.location || "TBA",
+            time: parsed.time || "TBA",
+            note: parsed.note || "-",
+            hashtag: parsed.hashtag || "-",
             imageUrl: (parsed.imageUrl && parsed.imageUrl.startsWith('http')) ? parsed.imageUrl : giveawayData.imageUrl
           };
         } catch (geminiErr) {
           console.error('Gemini Parsing Error:', geminiErr);
         }
 
-        // บันทึกลงฐานข้อมูล Supabase
+        // บันทึกลง Supabase
         await supabase
           .from('giveaway_items')
           .insert([
@@ -86,10 +93,10 @@ export default async function handler(req, res) {
             }
           ]);
 
-        // ส่งข้อความ Flex Message (ดีไซน์ใหม่ของคุณ) กลับไปยัง LINE
+        // ส่ง Flex Message กลับไปที่ LINE
         const lineToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
         if (lineToken && replyToken) {
-          await fetch('https://api.line.me/v2/bot/message/reply', {
+          await fetch('[https://api.line.me/v2/bot/message/reply](https://api.line.me/v2/bot/message/reply)', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -133,59 +140,12 @@ export default async function handler(req, res) {
                               type: "box",
                               layout: "vertical",
                               contents: [
-                                {
-                                  type: "text",
-                                  text: `Giveaway : ${giveawayData.giveawayName}`,
-                                  wrap: true,
-                                  weight: "bold",
-                                  size: "md",
-                                  color: "#f97ab6"
-                                },
-                                {
-                                  type: "text",
-                                  text: `🗓️ Date : ${giveawayData.date}`,
-                                  wrap: true,
-                                  size: "sm",
-                                  color: "#555555",
-                                  margin: "sm",
-                                  weight: "bold"
-                                },
-                                {
-                                  type: "text",
-                                  text: `📍 Location : ${giveawayData.location}`,
-                                  wrap: true,
-                                  size: "sm",
-                                  color: "#555555",
-                                  margin: "sm",
-                                  weight: "bold"
-                                },
-                                {
-                                  type: "text",
-                                  text: `⏳ Time : ${giveawayData.time}`,
-                                  wrap: true,
-                                  size: "sm",
-                                  color: "#555555",
-                                  margin: "sm",
-                                  weight: "bold"
-                                },
-                                {
-                                  type: "text",
-                                  text: `📝 Note : ${giveawayData.note}`,
-                                  wrap: true,
-                                  size: "sm",
-                                  color: "#555555",
-                                  margin: "sm",
-                                  weight: "bold"
-                                },
-                                {
-                                  type: "text",
-                                  text: `🏷️ Hashtag : ${giveawayData.hashtag}`,
-                                  wrap: true,
-                                  size: "xs",
-                                  color: "#0099ff",
-                                  margin: "xs",
-                                  weight: "bold"
-                                }
+                                { type: "text", text: `Giveaway : ${giveawayData.giveawayName}`, wrap: true, weight: "bold", size: "md", color: "#f97ab6" },
+                                { type: "text", text: `🗓️ Date : ${giveawayData.date}`, wrap: true, size: "sm", color: "#555555", margin: "sm", weight: "bold" },
+                                { type: "text", text: `📍 Location : ${giveawayData.location}`, wrap: true, size: "sm", color: "#555555", margin: "sm", weight: "bold" },
+                                { type: "text", text: `⏳ Time : ${giveawayData.time}`, wrap: true, size: "sm", color: "#555555", margin: "sm", weight: "bold" },
+                                { type: "text", text: `📝 Note : ${giveawayData.note}`, wrap: true, size: "sm", color: "#555555", margin: "sm", weight: "bold" },
+                                { type: "text", text: `🏷️ Hashtag : ${giveawayData.hashtag}`, wrap: true, size: "xs", color: "#0099ff", margin: "xs", weight: "bold" }
                               ],
                               flex: 3
                             },
