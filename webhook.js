@@ -26,23 +26,39 @@ export default async function handler(req, res) {
         const replyToken = event.replyToken;
 
         let twitterAccount = "ไม่ระบุ";
-        if (text.includes('x.com/') || text.includes('twitter.com/')) {
-          const match = text.match(/(?:x\.com|twitter\.com)\/([^\/]+)/);
-          if (match) twitterAccount = match[1];
+        let tweetImageUrl = ""; // ตัวแปรสำหรับเก็บรูปจาก Twitter
+
+        // 1. ดึงชื่อแอคเคาน์และ "ดึงรูปภาพ" จากลิงก์ Twitter อัตโนมัติ
+        const tweetMatch = text.match(/(?:x\.com|twitter\.com)\/([^\/]+)\/status\/(\d+)/);
+        if (tweetMatch) {
+          twitterAccount = tweetMatch[1];
+          try {
+            // ใช้ API เสริมเพื่อดึงรูปจากทวีต
+            const vxUrl = `https://api.vxtwitter.com/${tweetMatch[1]}/status/${tweetMatch[2]}`;
+            const vxRes = await fetch(vxUrl);
+            const vxData = await vxRes.json();
+            if (vxData && vxData.mediaURLs && vxData.mediaURLs.length > 0) {
+              tweetImageUrl = vxData.mediaURLs[0]; // เอารูปแรกสุดของทวีตมาใช้
+            }
+          } catch (e) {
+            console.error("Image Fetch Error:", e);
+          }
+        } else if (text.includes('x.com/') || text.includes('twitter.com/')) {
+           const accMatch = text.match(/(?:x\.com|twitter\.com)\/([^\/]+)/);
+           if (accMatch) twitterAccount = accMatch[1];
         }
 
-        // ค่าเริ่มต้น
         let giveawayData = {
-          giveawayName: "Giveaway จาก @" + twitterAccount,
+          giveawayName: "From @" + twitterAccount,
           date: "TBA",
           location: "TBA",
           time: "TBA",
           note: "-",
           hashtag: "-",
-          imageUrl: "https://images.unsplash.com/photo-1513519245088-0e12902e5a38?w=300"
+          imageUrl: tweetImageUrl || "https://images.unsplash.com/photo-1513519245088-0e12902e5a38?w=300" // ถ้ารูปดึงไม่ได้ค่อยใช้รูปสำรอง
         };
 
-        // ใช้ Gemini วิเคราะห์ข้อความแบบบังคับ JSON 100%
+        // 2. ใช้ Gemini จัดการแยกข้อมูล Date, Time, Location ให้ออกมาเป๊ะๆ
         try {
           const prompt = `สกัดข้อมูลจากข้อความนี้: "${text}"
           ให้ออกมาเป็น JSON เท่านั้น โดยใช้ key ตามนี้เป๊ะๆ:
@@ -52,35 +68,32 @@ export default async function handler(req, res) {
             "location": "สถานที่รับ (ถ้าไม่ระบุให้ใส่ TBA)",
             "time": "เวลา (ถ้าไม่ระบุให้ใส่ TBA)",
             "note": "รายละเอียดเพิ่มเติมสั้นๆ (ถ้าไม่มีให้ใส่ -)",
-            "hashtag": "แฮชแท็กทั้งหมดในข้อความ (ถ้าไม่มีให้ใส่ -)",
-            "imageUrl": "ลิงก์รูปภาพ (ถ้าไม่มีให้ใส่ค่าว่าง '')"
+            "hashtag": "แฮชแท็กทั้งหมดในข้อความ (ถ้าไม่มีให้ใส่ -)"
           }`;
 
           const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: prompt,
             config: {
-              responseMimeType: "application/json"
+              responseMimeType: "application/json" // บังคับให้ AI ส่งกลับมาเป็น JSON เท่านั้น
             }
           });
 
-          // ไม่ต้อง replace ```json แล้ว เพราะ API จะส่งมาเป็น JSON แท้ๆ
           const parsed = JSON.parse(response.text.trim());
           giveawayData = {
             ...giveawayData,
-            giveawayName: parsed.giveawayName !== "Giveaway" ? parsed.giveawayName : giveawayData.giveawayName,
+            giveawayName: (parsed.giveawayName && parsed.giveawayName !== "Giveaway") ? parsed.giveawayName : giveawayData.giveawayName,
             date: parsed.date || "TBA",
             location: parsed.location || "TBA",
             time: parsed.time || "TBA",
             note: parsed.note || "-",
-            hashtag: parsed.hashtag || "-",
-            imageUrl: (parsed.imageUrl && parsed.imageUrl.startsWith('http')) ? parsed.imageUrl : giveawayData.imageUrl
+            hashtag: parsed.hashtag || "-"
           };
         } catch (geminiErr) {
           console.error('Gemini Parsing Error:', geminiErr);
         }
 
-        // บันทึกลง Supabase
+        // 3. บันทึกลง Supabase
         await supabase
           .from('giveaway_items')
           .insert([
@@ -93,10 +106,10 @@ export default async function handler(req, res) {
             }
           ]);
 
-        // ส่ง Flex Message กลับไปที่ LINE
+        // 4. ตอบกลับ Flex Message
         const lineToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
         if (lineToken && replyToken) {
-          await fetch('[https://api.line.me/v2/bot/message/reply](https://api.line.me/v2/bot/message/reply)', {
+          await fetch('https://api.line.me/v2/bot/message/reply', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -107,7 +120,7 @@ export default async function handler(req, res) {
               messages: [
                 {
                   type: "flex",
-                  altText: "✨ Completed ✅",
+                  altText: " Completed ✅",
                   contents: {
                     type: "bubble",
                     size: "mega",
